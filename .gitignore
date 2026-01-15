@@ -3,3 +3,4 @@ credentials.json
 backups/
 __pycache__/
 *.tar
+venv/
