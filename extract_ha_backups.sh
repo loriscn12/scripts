@@ -2,9 +2,9 @@
 
 # --- CONFIGURATION ---
 VM_NAME="hass"
-DISK_IMAGE="/var/lib/libvirt/images/hassos-vm/haos_ova-6.6.qcow2"
+DISK_IMAGE="/mnt/myssd/vm-images/hassos-vm/haos_ova-6.6.qcow2"
 MOUNT_POINT="/mnt/ha_recovery"
-LOCAL_BACKUP_DIR="/home/loris/backups/homeassistant"
+LOCAL_BACKUP_DIR="/mnt/myssd/backup/homeassistant"
 TARGET_USER="loris"
 # ---------------------
 
