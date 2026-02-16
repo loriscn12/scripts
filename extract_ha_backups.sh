@@ -6,6 +6,7 @@ DISK_IMAGE="/mnt/myssd/vm-images/hassos-vm/haos_ova-6.6.qcow2"
 MOUNT_POINT="/mnt/ha_recovery"
 LOCAL_BACKUP_DIR="/mnt/myssd/backup/homeassistant"
 TARGET_USER="loris"
+BACKUP_RETENTION_COUNT=5
 # ---------------------
 
 # Check if running as root
@@ -18,7 +19,7 @@ echo "--- Starting Home Assistant Backup Extraction ---"
 date
 
 # 1. SHUTDOWN VM
-echo "[1/6] Stopping VM '$VM_NAME'..."
+echo "[1/7] Stopping VM '$VM_NAME'..."
 virsh shutdown "$VM_NAME" > /dev/null
 
 MAX_RETRIES=24
@@ -34,7 +35,7 @@ done
 echo "      VM is OFF."
 
 # 2. MOUNT DISK (READ-ONLY)
-echo "[2/6] Mounting disk image (Read-Only)..."
+echo "[2/7] Mounting disk image (Read-Only)..."
 mkdir -p "$MOUNT_POINT"
 umount "$MOUNT_POINT" 2>/dev/null
 
@@ -48,7 +49,7 @@ if [ $? -ne 0 ]; then
 fi
 
 # 3. SYNC FILES
-echo "[3/6] Syncing files to $LOCAL_BACKUP_DIR..."
+echo "[3/7] Syncing files to $LOCAL_BACKUP_DIR..."
 mkdir -p "$LOCAL_BACKUP_DIR"
 
 SOURCE_DIR="$MOUNT_POINT/supervisor/backup/"
@@ -63,28 +64,37 @@ fi
 # EXPLANATION OF FLAGS:
 # -a : Archive (keep permissions/times)
 # -v : Verbose
-# --delete : (OPTIONAL) Removes files locally if they are gone from HA.
-#            I removed it below to be safe. Add it back if you want a perfect mirror.
-
 rsync -av "$SOURCE_DIR" "$LOCAL_BACKUP_DIR/"
-# To auto-delete old files, change the line above to:
-# rsync -av --delete "$SOURCE_DIR" "$LOCAL_BACKUP_DIR/"
 
 # 4. FIX PERMISSIONS
-echo "[4/6] Fixing ownership for user $TARGET_USER..."
+echo "[4/7] Fixing ownership for user $TARGET_USER..."
 chown -R "$TARGET_USER:$TARGET_USER" "$LOCAL_BACKUP_DIR"
 
-# 5. UNMOUNT
-echo "[5/6] Unmounting disk..."
+# 5. CLEANUP OLD BACKUPS (NEW STEP)
+echo "[5/7] Cleaning up old backups (Retaining latest $BACKUP_RETENTION_COUNT)..."
+
+# Navigate to directory safely
+cd "$LOCAL_BACKUP_DIR" || { echo "Failed to enter backup dir"; exit 1; }
+
+# List files by time (newest first), skip the first X files, delete the rest.
+# -1t : One file per line, sorted by modification time (newest first)
+# tail -n +X : Start outputting from line X onwards (skipping the newest)
+# xargs -d '\n' -r rm : Delete the files piped to it, handling spaces correctly
+ls -1t | tail -n +$((BACKUP_RETENTION_COUNT + 1)) | xargs -d '\n' -r rm --
+
+# 6. UNMOUNT
+echo "[6/7] Unmounting disk..."
+# Move out of the directory so we don't block unmounting (though we are local, good practice)
+cd /
 umount "$MOUNT_POINT"
 sleep 2
 
-# 6. RESTART VM
-echo "[6/6] Starting VM '$VM_NAME'..."
+# 7. RESTART VM
+echo "[7/7] Starting VM '$VM_NAME'..."
 virsh start "$VM_NAME" > /dev/null
 
-echo "--- SUCCESS: Extraction complete and VM restarted ---"
+echo "--- SUCCESS: Extraction complete, cleaned up, and VM restarted ---"
 
-# 7. TRIGGER PYTHON UPLOAD
+# 8. TRIGGER PYTHON UPLOAD
 #echo "--- Starting Google Drive Upload ---"
 #sudo -u "$TARGET_USER" python3 /home/loris/backup_vm_drive.py
