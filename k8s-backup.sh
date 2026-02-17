@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # 1. Configuration
-BACKUP_ROOT="/mnt/myssd/backup"
+BACKUP_ROOT="/mnt/myssd/backup/yaml-k8s"
 DATE=$(date +%F)
 BACKUP_DIR="$BACKUP_ROOT/yaml-backup-$DATE"
 MICROK8S="/snap/bin/microk8s"  # Full path is safer for Cron
