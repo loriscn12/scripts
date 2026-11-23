@@ -26,7 +26,7 @@ STUBS = {
     "df": 'n=$(cat "$LOG/df" 2>/dev/null || echo 0); echo $((n + 1)) >"$LOG/df"\n'
           'echo Avail; [ "$n" = 0 ] && echo " 10G" || echo " 20G"',
     # runuser: logged, then the command run (as the test's own user).
-    "runuser": 'echo "$*" >>"$LOG/runuser"\n[[ -n "${RUNUSER_FAIL:-}" && "$*" == *"$RUNUSER_FAIL"* ]] && exit 1\nshift 3\nexec "$@"',
+    "runuser": 'echo "$*" >>"$LOG/runuser"\npwd >>"$LOG/runuser.pwd"\n[[ -n "${RUNUSER_FAIL:-}" && "$*" == *"$RUNUSER_FAIL"* ]] && exit 1\nshift 3\nexec "$@"',
     # install: copies (the real one would also chown to root).
     "install": 'echo "$*" >>"$LOG/install"\n[ -n "${INSTALL_FAIL:-}" ] && exit 1\ncp "${@: -2:1}" "${@: -1}"',
 }
@@ -64,10 +64,10 @@ def log(env, name):
         return []
 
 
-def test_cleans_an_idle_runner_and_keeps_its_tools(env):
+def test_cleans_an_idle_runner_and_keeps_its_tools(env, tmp_path):
     d = runner(env, "moneytrac")
     env["UNITS"] = "gha-runner-moneytrac.service"
-    r = run("disk-cleanup.sh", env=env)
+    r = run("disk-cleanup.sh", env=env, cwd=tmp_path)
     assert r.returncode == 0, r.stdout + r.stderr
     assert sorted(os.listdir(os.path.join(d, "_work"))) == ["_tool"]
     assert os.path.isdir(os.path.join(d, "_work/_tool/go"))
@@ -76,6 +76,8 @@ def test_cleans_an_idle_runner_and_keeps_its_tools(env):
     assert log(env, "pgrep") == [f"-u gha-moneytrac -f ^{d}/bin/Runner.Worker"]
     # deleted as the runner's own user, never as root
     assert [c.split(" -- ")[0] for c in log(env, "runuser")] == ["-u gha-moneytrac"] * 2
+    # from /, not the caller's folder (which the runner's user can't enter)
+    assert log(env, "runuser.pwd") == ["/", "/"]
     calls = log(env, "systemctl")
     assert calls.index("stop gha-runner-moneytrac.service") < calls.index("start gha-runner-moneytrac.service")
     assert "moneytrac: cleaned" in r.stdout
