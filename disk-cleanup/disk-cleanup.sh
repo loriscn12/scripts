@@ -54,6 +54,9 @@ clean() {
   # is still deleting its checkouts.
   exec 9>"$LOCK"
   flock -n 9 || die "already running"
+  # The runners' users can't enter most folders (sudo from /home/loris):
+  # find stops if it can't use the folder it was started in.
+  cd / || die "can't change to /"
   local before failed=0 dir
   before=$(free_gb)
   for dir in "${RUNNERS:?}"/*/; do
